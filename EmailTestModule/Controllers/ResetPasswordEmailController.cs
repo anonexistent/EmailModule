@@ -28,5 +28,15 @@ public class ResetPasswordEmailController : ControllerBase
 
         return Ok(new OutputResetPasswordMessage(result.Answer));
     }
+
+    [HttpPost("sendMessageCache")]
+    public async Task<IActionResult> SendInCache([FromQuery] ToMessageQuery q)
+    {
+        var result = await _resetPasswordEmailService.SendInCache(q.To, q.Message);
+
+        if (!result.Ok || result.Answer is null) return BadRequest(result.Errors);
+
+        return Ok(new OutputResetPasswordMessage(result.Answer));
+    }
         
 }

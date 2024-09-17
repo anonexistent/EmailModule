@@ -1,7 +1,9 @@
 ﻿using EfiritPro.Retail.Packages.Errors.Models;
 using Models;
 using Persistence;
+using StackExchange.Redis;
 using System.Net.Mail;
+using System.Text.Json;
 
 namespace EmailTestModule.Services;
 
@@ -10,15 +12,24 @@ public class ResetPasswordEmailService
     private readonly EmailTestDbContext _emailDb;
     private readonly string _defaultSenderEmail;
     private readonly string _defaultSenderPassword;
+    private readonly string _redisPath;
+    private readonly string _redisUsername;
+    private readonly string _redisPassword;
 
     public ResetPasswordEmailService(EmailTestDbContext emailDb)
     {
         _emailDb = emailDb;
 
         _defaultSenderEmail = Environment.GetEnvironmentVariable("DEFAULT_SENDER_EMAIL") ??
-                              throw new InvalidOperationException($"string {nameof(_defaultSenderEmail).ToUpper()} not found.");
+                              throw new InvalidOperationException($"string {nameof(_defaultSenderEmail)} not found.");
         _defaultSenderPassword = Environment.GetEnvironmentVariable("DEFAULT_SENDER_PASSWROD") ??
-                              throw new InvalidOperationException($"string {nameof(_defaultSenderPassword).ToUpper()} not found.");
+                              throw new InvalidOperationException($"string {nameof(_defaultSenderPassword)} not found.");
+        _redisPath = Environment.GetEnvironmentVariable("REDIS_PATH") ??
+                              throw new InvalidOperationException($"string {nameof(_redisPath)} not found.");
+        _redisUsername = Environment.GetEnvironmentVariable("REDIS_USERNAME") ??
+                              throw new InvalidOperationException($"string {nameof(_redisUsername)} not found.");
+        _redisPassword = Environment.GetEnvironmentVariable("REDIS_PASSWORD") ??
+                              throw new InvalidOperationException($"string {nameof(_redisPassword)} not found.");
     }
 
     public async Task<ServiceAnswer<ResetPasswordMessage>> Send(string? to, string msg)
@@ -104,8 +115,50 @@ public class ResetPasswordEmailService
         };
     }
 
-    //public async Task<ServiceAnswer<CacheMessage>> WriteInCache(ResetPasswordMessage email)
-    //{
+    public async Task<ServiceAnswer<ResetPasswordMessage>> SendInCache(string? to, string msg)
+    {
+        var errors = new List<object>();
 
-    //}
+        ResetPasswordMessage message = new()
+        {
+            Id = Guid.NewGuid(),
+            To = to ?? _defaultSenderEmail,
+            Date = DateTime.UtcNow
+        };
+
+        var redisOptions = ConfigurationOptions.Parse(_redisPath);
+        redisOptions.AbortOnConnectFail = false;
+        redisOptions.User = _redisUsername;
+        redisOptions.Password = _redisPassword;
+
+        var connection = ConnectionMultiplexer.Connect(redisOptions);
+        
+            //try
+            //{
+                var db = connection.GetDatabase();
+                var jsonMessage = JsonSerializer.Serialize<ResetPasswordMessage>(message);
+                await db.StringSetAsync(message.Id.ToString(), jsonMessage);
+
+                return new ServiceAnswer<ResetPasswordMessage>()
+                {
+                    Ok = true,
+                    Answer = message
+                };
+            //}
+            //catch (Exception ex)
+            //{
+            //    errors.Add(new ServiceFieldError()
+            //    { 
+            //        Fields = new[] { "to", "message" },
+            //        Message = "Ошибка отправки в кэш."
+            //    });
+            //}
+        
+
+        return new ServiceAnswer<ResetPasswordMessage>()
+        {
+            Ok = false,
+            Errors = errors
+        };
+    }
 }
