@@ -41,10 +41,10 @@ public class ResetPasswordEmailService
             return new ServiceAnswer<ResetPasswordMessage>()
             {
                 Ok = false,
-                Errors = new[] { 
+                Errors = { 
                     new ServiceFieldError()
                     {
-                        Fields = new[] { "message" },
+                        Fields = ["message"],
                         Message = "Сообщение не должно быть пустым."
                     } 
                 }
